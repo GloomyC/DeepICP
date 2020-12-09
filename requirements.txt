@@ -1,0 +1,33 @@
+python 3.6
+tensorflow >= 2.2
+CUDA 10.1
+
+DO NOT USE CONDA as linking tensorflow for compiling PointNet++ doesn't work out of box
+
+in case of error
+"assert len(gpu_devices ) > 0"
+run this in terminal
+export LD_LIBRARY_PATH=/usr/local/cuda-10.2/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+https://stackoverflow.com/a/64472380 for more troubleshooting
+
+===
+to compile PointNet++ ops:
+sh tf_ops/compile_ops.sh
+
+to test and debug net in current not finished state:
+python3 train.py -mn <anything> -new
+
+to debug, literally change model outputs to what layer you want and inspect them
+
+for functionality that is mostly not implemented python3 train.py --help
+
+
+
+
+
+
+
+
+
+
+

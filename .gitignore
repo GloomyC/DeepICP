@@ -1,0 +1,17 @@
+
+# ignore all config.json files except project_config_template and default configs
+/configs/**/*.json
+!/configs/project_config_template.json
+!/configs/net/default_net.json
+!/configs/train/default_train.json
+!/configs/test/default_test.json
+
+#jupyter execution history
+**/.ipynb_checkpoints
+
+#python compiles
+__pycache__/*
+
+#cuda (you have to recompile anyway)
+*.cu.o
+*.so
