@@ -3,6 +3,6 @@
 "loss_alpha": 0.5,
 "train_test_split": 0.8,
 "train_validate_split": 0.75,
-"point_cloud_size": 5000,
-"epochs" : 20
+"point_cloud_size": 50000,
+"epochs" : 10
 }
