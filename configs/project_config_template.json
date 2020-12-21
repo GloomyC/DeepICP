@@ -1,8 +1,9 @@
 {
 "model_checkpoint_path" : "E:/absolute/path/where/models/will/be/saved",
-"KITTI_dataset_path" : "E:/abosolute/path/to/root/of/dataset",
+"dataset_path" : "E:/absolue/path/to/dataset/root/directory",
 "saved_video_path" : "E:/absolute/path/to/directory/with/realsense/files",
 "default_net_config" : "default_net",
 "default_train_config" : "default_train",
-"default_test_config" : "default_test"
+"default_test_config" : "default_test",
+"seed": 45
 }

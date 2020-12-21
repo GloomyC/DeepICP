@@ -1,14 +1,17 @@
 {
-"DFEX_downsampling_groups" : [64,32,16],
+"DFEX_downsampling_group_sizes" : [64,32,16],
+"DFEX_downsampling_group_nums": [2048,1024,512],
 "DFEX_downsampling_mlps": [[32,32],[32,64],[64,64]],
 "DFEX_upsampling_mlps": [[64,64],[64,32],[32,32]],
+"DFEX_sigma": 0.1,
+"DFEX_radius": 1,
 "DFEX_full_conn": 32,
 "DFEX_dropout": 0.7,
 "weighting_mlp": [16,8,1],
 "weighting_select_top_k": 32,
-"voxel_sampling_radius": 3.0,
+"voxel_sampling_radius": 2.0,
 "voxel_size": 1.0,
-"ball_radius": 1.0,
+"ball_radius": 0.5,
 "group_size" : 32,
 "DFEB_mlp": [32,32,32]
 }

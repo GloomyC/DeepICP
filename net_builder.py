@@ -16,15 +16,14 @@ class DeepICPBuilder:
         source_xyz = Input(shape = (None,3), name = 'source_xyz')
         target_xyz = Input(shape = (None,3), name = 'target_xyz')
         prev_transform_input = Input(shape = (4,4), name = 'prev_transform_input')
+        GT_transform_target = Input(shape = (4,4), name = 'GT_transform_target')
         
         DFEX = self.get_DFEX_submodel()
         DFEB = self.get_DFEB_submodel()
         
         source_features = DFEX(source_xyz)
         target_features = DFEX(target_xyz)
-        source_xyzfeatures = Lambda(lambda x: tf.concat([x[0], x[1]],axis = -1),name='append_xyz_to_source_features')([source_xyz,source_features])
-#         target_xyzfeatures = Lambda(lambda x: tf.concat([x[0], x[1]],axis = -1),name='append_xyz_to_target_features')([target_xyz,target_features])
-        
+        source_xyzfeatures = Lambda(lambda x: tf.concat([x[0], x[1]],axis = -1),name='append_xyz_to_source_features')([source_xyz,source_features])        
         selected_source_points_indices = self.weighting_layer(source_features)
         selected_source_points_xyzfeatures = self.select_points_by_indices(source_xyzfeatures, selected_source_points_indices)
         selected_source_points_xyz = Lambda(lambda x : x[:,:,0:3],name ="get_xyz_from_features")(selected_source_points_xyzfeatures)
@@ -38,17 +37,16 @@ class DeepICPBuilder:
         target_voxels_FEB = self.dfeb_grouped_voxels(DFEB,target_voxels_grouped_features)
         source_points_FEB = DFEB(selected_source_points_grouped_features)
         
-        return Model([source_xyz,target_xyz, prev_transform_input], [target_voxels_FEB,source_points_FEB])
+        generated_target_xyz = self.CPG(target_voxels_xyz, target_voxels_FEB, source_points_FEB)
+        
+        
+        model = Model([source_xyz,target_xyz, prev_transform_input, GT_transform_target], [selected_source_points_xyz ,generated_target_xyz])
+        loss_args = (selected_source_points_xyz ,generated_target_xyz, GT_transform_target)
+
+        return model, loss_args
         
         #=============
         
-
-#         DFEB = self.get_DFEB_submodel()
-#         _max, mlp = DFEB(PC_source_input)
-
-    
-
-#         return Model([PC_source_input,prev_transform_input], [target_voxels])
 
         
     def get_DFEX_submodel(self):
@@ -57,7 +55,10 @@ class DeepICPBuilder:
         #
         # returns - (B,N,F) batched points, each with F features
         
-        d_groups = self.net_config['DFEX_downsampling_groups']
+        d_group_sizes = self.net_config['DFEX_downsampling_group_sizes']
+        d_group_nums = self.net_config['DFEX_downsampling_group_nums']
+        sigma = self.net_config['DFEX_sigma']
+        radius = self.net_config['DFEX_radius']
         mlp_d = self.net_config['DFEX_downsampling_mlps']
         mlp_u = self.net_config['DFEX_upsampling_mlps']
         full_conn = self.net_config['DFEX_full_conn']
@@ -65,16 +66,13 @@ class DeepICPBuilder:
         
         DFE_input = Input(shape = (None,3))
         
-        #TODO make npoint arguments come from config or make it dependant on PC size
-        #TODO make radius come from config
-        #TODO make sigma come from config
-        xyz_d1, features_d1 = PointConvSA(npoint=1024, radius=0.4, sigma=0.1, K=d_groups[0], mlp=mlp_d[0], bn=True)(DFE_input,DFE_input)
-        xyz_d2, features_d2 = PointConvSA(npoint=512, radius=0.4, sigma=0.1, K=d_groups[1], mlp=mlp_d[1], bn=True)(xyz_d1,features_d1)
-        xyz_d3, features_d3 = PointConvSA(npoint=256, radius=0.4, sigma=0.1, K=d_groups[2], mlp=mlp_d[2], bn=True)(xyz_d2,features_d2)
+        xyz_d1, features_d1 = PointConvSA(npoint=d_group_nums[0], radius=radius, sigma=sigma, K=d_group_sizes[0], mlp=mlp_d[0], bn=True)(DFE_input,DFE_input)
+        xyz_d2, features_d2 = PointConvSA(npoint=d_group_nums[1], radius=radius, sigma=sigma, K=d_group_sizes[1], mlp=mlp_d[1], bn=True)(xyz_d1,features_d1)
+        xyz_d3, features_d3 = PointConvSA(npoint=d_group_nums[2], radius=radius, sigma=sigma, K=d_group_sizes[2], mlp=mlp_d[2], bn=True)(xyz_d2,features_d2)
         
-        features_u3 = PointConvFP(radius=0.4, sigma=0.1, K=d_groups[2], mlp = mlp_u[0])(xyz_d2, xyz_d3, features_d2, features_d3)
-        features_u2 = PointConvFP(radius=0.4, sigma=0.1, K=d_groups[1], mlp = mlp_u[1])(xyz_d1, xyz_d2, features_d1, features_u3)
-        features_u1 = PointConvFP(radius=0.4, sigma=0.1, K=d_groups[0], mlp = mlp_u[2])(DFE_input, xyz_d1, DFE_input, features_u2)
+        features_u3 = PointConvFP(radius=radius, sigma=sigma, K=d_group_sizes[2], mlp = mlp_u[0])(xyz_d2, xyz_d3, features_d2, features_d3)
+        features_u2 = PointConvFP(radius=radius, sigma=sigma, K=d_group_sizes[1], mlp = mlp_u[1])(xyz_d1, xyz_d2, features_d1, features_u3)
+        features_u1 = PointConvFP(radius=radius, sigma=sigma, K=d_group_sizes[0], mlp = mlp_u[2])(DFE_input, xyz_d1, DFE_input, features_u2)
         
         features_fc = Dense(full_conn)(features_u1)
         features_dropped = TimeDistributed(Dropout(dropout))(features_fc)
@@ -82,13 +80,16 @@ class DeepICPBuilder:
         
         return Model(DFE_input,features_dropped,name='DFEX_submodel')
     
+    
+    
+    
     def select_points_by_indices(self,points,indices):
         # points - (B,N,F) tensor N batched points each with F features
         # indices - (B,I) tensor of batched indexes of points that should be selected
         #
         # returns - (B,I,F) tensor of points selected by indices
         
-        assert len(points.shape) is 3 and len(indices.shape) is 2
+        assert len(points.shape) == 3 and len(indices.shape) == 2
         
         #nothing in tf does this straight forward for each batch independantly, spaghetti incoming
         def fun(pt,idx):
@@ -153,7 +154,7 @@ class DeepICPBuilder:
         def fun(p,t):
             s = tf.shape(p)
             one_pad_points = tf.concat([p,tf.ones([s[0],s[1],1])],axis = -1)
-            t_points = tf.matmul(one_pad_points,t)[...,0:3]
+            t_points = tf.transpose(tf.matmul(t,one_pad_points,transpose_b=True),[0,2,1])[...,0:3]
 
             return t_points
         
@@ -277,12 +278,37 @@ class DeepICPBuilder:
         n_features = self.net_config['DFEX_full_conn']
         n_dfeb_features = self.net_config['DFEB_mlp'][-1]
         
-        reshaped_voxels = Lambda(lambda x: tf.reshape(x,[-1,n_pts*n_voxels,n_group_pts,n_features+3]))(grouped_voxels)
+        reshaped_voxels = Lambda(lambda x: tf.reshape(x,[-1,n_pts*n_voxels,n_group_pts,n_features+3]),name='target_reshape_before_DFEB')(grouped_voxels)
         reshaped_voxel_dfeb = DFEB(reshaped_voxels)
         
-        unreshaped_voxel_dfeb = Lambda(lambda x: tf.reshape(x,[-1,n_pts,n_voxels,n_dfeb_features]))(reshaped_voxel_dfeb)
+        unreshaped_voxel_dfeb = Lambda(lambda x: tf.reshape(x,[-1,n_pts,n_voxels,n_dfeb_features]),name='target_reshape_after_DFEB')(reshaped_voxel_dfeb)
         
         return unreshaped_voxel_dfeb
+    
+    def CPG(self, target_candidates, target_features, source_features):
+        
+        def fun(t_f, s_f):
+            
+            C = tf.shape(t_f)[2]
+            
+            source_expanded_repeated = tf.repeat(tf.expand_dims(s_f,axis=2),C,axis = 2)
+            
+            f_diff = tf.sqrt((source_expanded_repeated - t_f)**2)
+            
+            return f_diff
+
+        feature_diff = Lambda(lambda x: fun(x[0],x[1]),name ='CPG')([target_features,source_features])
+        
+        conv1 = Conv2D(16,3,padding='same',name='3Dconv_1')(feature_diff)
+        conv2 = Conv2D(8,3,padding='same',name='3Dconv_2')(conv1)
+        conv3 = Conv2D(1,3,padding='same',name='3Dconv_3')(conv2)
+        
+        mat = Lambda(lambda x: tf.nn.softmax(x,-1),name='softmax')(conv3)
+        
+        points = Lambda(lambda x: tf.reduce_sum(tf.repeat(x[0],3,axis=-1)*x[1],axis = -2),name = 'weights_multi')([mat,target_candidates])
+        
+        return points
+            
         
         
         

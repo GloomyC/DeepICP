@@ -1,3 +1,8 @@
 {
-"TODO_train": "TODO_train"
+"learning_rate": 0.001,
+"loss_alpha": 0.5,
+"train_test_split": 0.8,
+"train_validate_split": 0.75,
+"point_cloud_size": 5000,
+"epochs" : 20
 }

@@ -36,17 +36,17 @@ def parse_train_args():
                         "-b",
                         type = int,
                         metavar = "NUM",
-                        default = None,
+                        default = 8,
                         help = "Size of batch during training, overrides config file")
-    parser.add_argument("--load_weights",
-                        "-lw",
+    parser.add_argument("--weights",
+                        "-w",
                         type = str,
                         choices = ["last","best"],
                         default = "last",
                         help = "Which model checkpoint to load")
     parser.add_argument("--verbose",
                         "-v",
-                        type = bool,
+                        action="store_true",
                         default = False,
                         help = "More logs")
     parser.add_argument("--new_model",

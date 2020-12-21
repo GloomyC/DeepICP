@@ -1,6 +1,9 @@
 from os import listdir
 from os.path import exists, isfile
+from model import delete_model
 import json
+import os
+
 
 class Config:
     
@@ -13,6 +16,8 @@ class Config:
         self.new_model = False
         self.model_name = None
         self.verbose = False
+        self.weights = None
+        self.batch_size = None
         
         #other objects should not be reaching into args to configure anything
         self.args = None
@@ -63,17 +68,17 @@ class Config:
     def save_current_model_net_config(self):
         checkpoint_path = self.project_config['model_checkpoint_path']
         with open(f'{checkpoint_path}/{self.model_name}/net_config.json','w') as json_file:
-            json.dump(self.net_config,json_file)
+            json.dump(self.net_config,json_file,indent=2)
 
     def save_current_model_train_config(self):
         checkpoint_path = self.project_config['model_checkpoint_path']
         with open(f'{checkpoint_path}/{self.model_name}/train_config.json','w') as json_file:
-            json.dump(self.net_config,json_file)
+            json.dump(self.train_config,json_file,indent=2)
 
     def save_current_model_test_config(self):
         checkpoint_path = self.project_config['model_checkpoint_path']
         with open(f'{checkpoint_path}/{self.model_name}/test_config.json','w') as json_file:
-            json.dump(self.net_config,json_file)
+            json.dump(self.test_config,json_file,indent=2)
     
     #APPLY ARGS
     #========================
@@ -84,8 +89,15 @@ class Config:
             exit()
         self.model_name = args['model_name']
         self.verbose = args['verbose']
+        self.weights = args['weights']
+        self.batch_size = args['batch_size']
         
         if args['new_model']:
+            if(exists(f"{self.project_config['model_checkpoint_path']}/{self.model_name}")):
+                if not get_user_yes_no(f'Found model named \"{self.model_name}\", do you want to delete it and create new one? Y/N: '):
+                    print('exiting')
+                    exit()
+                delete_model(self)
             
             if args['net_config'] is not None:
                 self.load_net_config(args['net_config'])
@@ -100,10 +112,16 @@ class Config:
                 self.load_train_config(self.project_config['default_train_config'])
         else:
             if not exists(f"{self.project_config['model_checkpoint_path']}/{self.model_name}"):
-                print(f"model with name \"{self.model_name}\" could not be found, to create new model use -new")
+                print(f"model with name \"{self.model_name}\" could not be found, to create new model use -new, use --help for usage")
                 exit()
+                
             self.load_existing_model_net_config(self.model_name)
-            self.load_existing_model_train_config(self.model_name)
+            
+            if args['train_config'] is not None:
+                self.load_train_config(args['train_config'])
+            else:
+                self.load_existing_model_train_config(self.model_name)
+            
            
         #override train_config with args
         if args['epochs'] is not None:
@@ -132,6 +150,16 @@ class Config:
         print("test_config:")
         print(self.test_config)
         print("======================================")
+        
+def get_user_yes_no(msg):
+    while(True):
+        inp = input(msg)
+        
+        if(inp.lower().strip() in ['y','yes']):
+            return True
+        if(inp.lower().strip() in ['n','no']):
+            return False
+            
         
         
             
